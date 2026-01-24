@@ -1,13 +1,13 @@
 {
   "name": "ใบสั่งซื้อสินค้า",
   "short_name": "PO",
-  "start_url": "/-/",
-  "scope": "/-/",
+  "start_url": "/TRO/",
+  "scope": "/TRO/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#111111",
   "icons": [
-    { "src": "/-/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/-/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/TRO/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/TRO/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
