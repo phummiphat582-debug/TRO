@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <title>ใบสั่งซื้อสินค้า | THE SCENERY VINTAGE FARM</title>
+
+<!-- PWA (อ้างอิงให้ตรงกับไฟล์ที่คุณมี) -->
+<link rel="manifest" href="/-/manifest.json">
+<meta name="theme-color" content="#111111">
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f0f1f3;font-family:Segoe UI,Tahoma,sans-serif;color:#222}
@@ -24,7 +29,6 @@ input,textarea{
 textarea{resize:vertical}
 
 .card{margin-top:24px;background:#fafafa;padding:20px;border-radius:16px}
-
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{background:#2f2f2f;color:#fff;padding:8px}
 td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
@@ -33,34 +37,30 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .btn.add{background:#e6e8ec}
 .btn-del{background:#fee2e2;border:none;border-radius:8px;padding:4px 8px;cursor:pointer}
 
-.actions{margin-top:20px;display:flex;justify-content:flex-end;align-items:center;gap:16px}
+.actions{
+  margin-top:20px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px
+}
 
-/* รูป (ขยายแล้ว) */
+/* รูป */
 .img-box{
-  width:130px;
-  height:130px;
+  width:130px;height:130px;
   border:2px dashed #94a3b8;
   border-radius:12px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  overflow:hidden;
-  background:#fff
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;overflow:hidden;background:#fff
 }
 .img-box img{width:100%;height:100%;object-fit:cover}
 .img-hint{font-size:11px;color:#64748b;text-align:center}
 
-/* แถวล่างของรายการ */
-.sub-row td{
-  background:#f9fafb;
-}
-.sub-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:16px;
-}
+/* แถวล่าง */
+.sub-row td{background:#f9fafb}
+.sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
+/* modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000}
 .modal-box{background:#fff;padding:24px;border-radius:16px;width:340px;text-align:center}
 .modal-actions{display:flex;justify-content:center;gap:12px;margin-top:16px}
@@ -68,7 +68,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .modal .ghost{background:#e5e7eb}
 
 @media print{
-  button,.btn-del{display:none!important}
+  button,.btn-del,#installBtn{display:none!important}
 }
 </style>
 </head>
@@ -96,17 +96,9 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
     <table>
       <thead>
         <tr>
-          <th>#</th>
-          <th>รายละเอียด</th>
-          <th>รูป</th>
-          <th>หน่วย</th>
-          <th>สต็อก</th>
-          <th>คงเหลือ</th>
-          <th>ซื้อเพิ่ม</th>
-          <th>ราคา</th>
-          <th>รวม</th>
-          <th>ร้าน</th>
-          <th>ลบ</th>
+          <th>#</th><th>รายละเอียด</th><th>รูป</th><th>หน่วย</th>
+          <th>สต็อก</th><th>คงเหลือ</th><th>ซื้อเพิ่ม</th>
+          <th>ราคา</th><th>รวม</th><th>ร้าน</th><th>ลบ</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -117,8 +109,13 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
   </div>
 
   <div class="actions">
-    <strong>รวม <span id="grand">0.00</span> บาท</strong>
-    <button class="btn" onclick="window.print()">🖨 พิมพ์ / Save PDF</button>
+    <div>
+      <strong>รวม <span id="grand">0.00</span> บาท</strong>
+    </div>
+    <div>
+      <button class="btn add" id="installBtn" style="display:none">⬇️ ติดตั้งแอป</button>
+      <button class="btn" onclick="window.print()">🖨 พิมพ์ / Save PDF</button>
+    </div>
   </div>
 </div>
 
@@ -147,6 +144,30 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 </div>
 
 <script>
+/* ===== PWA INSTALL ===== */
+let deferredPrompt;
+const installBtn = document.getElementById('installBtn');
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display='inline-block';
+});
+
+installBtn.addEventListener('click', async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt=null;
+  installBtn.style.display='none';
+});
+
+/* register service worker (ตรงกับไฟล์คุณ) */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/-/sw.js');
+}
+
+/* ===== APP LOGIC (เดิมทั้งหมด) ===== */
 const monthInput=document.getElementById('monthPicker');
 const deptInput=document.getElementById('deptInput');
 const tbody=document.getElementById('tbody');
@@ -230,9 +251,9 @@ function confirmDelete(){
 
 function calcAll(){
   let g=0;
-  tbody.querySelectorAll('tr').forEach(tr=>{
-    if(!tr.querySelector('.buy')) return;
-    const q=tr.querySelector('.buy').value||0;
+  tbody.querySelectorAll('.buy').forEach(b=>{
+    const tr=b.closest('tr');
+    const q=b.value||0;
     const p=tr.querySelector('.price').value||0;
     const s=(q*p).toFixed(2);
     tr.querySelector('.sum').innerText=s;
