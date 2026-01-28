@@ -100,10 +100,17 @@ deptInput.oninput=saveMonth;
 function addRow(d={}){
   const m=document.createElement('tr');
   const s=document.createElement('tr');s.className='sub-row';
+
+  let imgHTML='<span class="img-hint">แนบรูป</span>';
+  if(d.img){
+    const url = URL.createObjectURL(d.img);
+    imgHTML = `<img src="${url}">`;
+  }
+
   m.innerHTML=`
     <td class="no"></td>
     <td><textarea>${d.desc||''}</textarea></td>
-    <td><div class="img-box">${d.img?`<img src="${URL.createObjectURL(d.img)}">`:'<span class="img-hint">แนบรูป</span>'}<input type="file" hidden></div></td>
+    <td><div class="img-box">${imgHTML}<input type="file" hidden></div></td>
     <td><input value="${d.unit||''}"></td>
     <td><input type="number" value="${d.stock||''}"></td>
     <td><input type="text" value="${d.remain||''}"></td>
@@ -112,11 +119,19 @@ function addRow(d={}){
     <td class="sum">0.00</td>
     <td><input value="${d.vendor||''}"></td>
     <td><button class="btn-del" onclick="this.closest('tr').nextSibling.remove();this.closest('tr').remove();renumber();calcAll();saveMonth()">🗑</button></td>`;
+
+  if(d.img){ m.querySelector('img')._file = d.img; }
+
   s.innerHTML=`<td colspan="11"><div class="sub-grid">
     <div><label>จุดประสงค์</label><textarea>${d.purpose||''}</textarea></div>
     <div><label>สถานที่ใช้งาน</label><textarea>${d.location||''}</textarea></div>
   </div></td>`;
-  tbody.append(m,s);bindRow(m,s);renumber();calcAll();saveMonth();
+
+  tbody.append(m,s);
+  bindRow(m,s);
+  renumber();
+  calcAll();
+  saveMonth();
 }
 
 function bindRow(m,s){
