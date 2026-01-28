@@ -176,12 +176,31 @@ async function loadMonth(){
 }
 
 /* ===== Backup / Restore ===== */
+/* ===== Backup / Restore (FIX: รองรับรูปภาพจริง) ===== */
+async function blobToBase64(blob){
+  return new Promise(res=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.readAsDataURL(blob);
+  });
+}
+async function base64ToBlob(b64){
+  const res=await fetch(b64);
+  return await res.blob();
+}
+
 async function backupDB(){
   if(!db)await openDB();
   const tx=db.transaction('months','readonly');
   const req=tx.objectStore('months').getAll();
-  req.onsuccess=()=>{
-    const blob=new Blob([JSON.stringify(req.result)],{type:'application/json'});
+  req.onsuccess=async()=>{
+    const data=JSON.parse(JSON.stringify(req.result));
+    for(const m of data){
+      for(const r of m.rows){
+        if(r.img){ r.img = await blobToBase64(r.img); }
+      }
+    }
+    const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
     a.download='PO-backup.json';
@@ -193,6 +212,11 @@ async function restoreDB(file){
   if(!db)await openDB();
   const text=await file.text();
   const data=JSON.parse(text);
+  for(const m of data){
+    for(const r of m.rows){
+      if(r.img){ r.img = await base64ToBlob(r.img); }
+    }
+  }
   const tx=db.transaction('months','readwrite');
   const store=tx.objectStore('months');
   data.forEach(d=>store.put(d));
