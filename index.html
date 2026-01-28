@@ -221,6 +221,7 @@ async function restoreDB(file){
   const store=tx.objectStore('months');
   data.forEach(d=>store.put(d));
   alert('กู้ข้อมูลเรียบร้อย');
+  loadMonth();
 }
 
 addRow();
