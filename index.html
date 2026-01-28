@@ -207,9 +207,14 @@ async function base64ToBlob(b64){
 async function backupDB(){
   if(!db)await openDB();
   const tx=db.transaction('months','readonly');
-  const req=tx.objectStore('months').getAll();
+  const store=tx.objectStore('months');
+  const month=monthInput.value;
+  if(!month){alert('กรุณาเลือกเดือนก่อนสำรองข้อมูล');return;}
+
+  const req=store.get(month);
   req.onsuccess=async()=>{
-    const data=JSON.parse(JSON.stringify(req.result));
+    if(!req.result){alert('ไม่พบข้อมูลของเดือนนี้');return;}
+    const data=JSON.parse(JSON.stringify([req.result]));
     for(const m of data){
       for(const r of m.rows){
         if(r.img){ r.img = await blobToBase64(r.img); }
@@ -218,8 +223,12 @@ async function backupDB(){
     const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download='PO-backup.json';
+    a.download=`PO-${month}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+  };
+}
   };
 }
 
