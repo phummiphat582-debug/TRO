@@ -32,7 +32,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .sub-row td{background:#f9fafb}
 .sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
-/* popup animation */
+/* popup */
 .popup-backdrop{
   position:fixed;inset:0;
   background:rgba(0,0,0,.45);
@@ -80,7 +80,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
       </thead>
       <tbody id="tbody"></tbody>
     </table>
-    <button class="btn add" onclick="addRow()">+ เพิ่มรายการ</button>
+    <button class="btn add" id="addBtn">+ เพิ่มรายการ</button>
   </div>
 
   <div class="actions">
@@ -106,6 +106,13 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 
 <script>
 /* ===== popup ===== */
+const popup=document.getElementById('popup');
+const popupBox=document.getElementById('popupBox');
+
+popup.onclick=e=>{
+  if(e.target===popup) closePopup();
+};
+
 function showPopup({title,msg,actions=[]}){
   popupTitle.innerText=title;
   popupMsg.innerText=msg||'';
@@ -125,7 +132,7 @@ function closePopup(){
   setTimeout(()=>popup.style.display='none',200);
 }
 
-/* ===== PWA install ===== */
+/* ===== PWA ===== */
 let deferredPrompt;
 const installBtn=document.getElementById('installBtn');
 window.addEventListener('beforeinstallprompt',e=>{
@@ -144,31 +151,32 @@ if('serviceWorker'in navigator){
 }
 
 /* ===== IndexedDB (images) ===== */
-let db;
+let dbReady=false, db;
 const dbReq=indexedDB.open('PO_IMAGES',1);
 dbReq.onupgradeneeded=e=>{
   db=e.target.result;
   db.createObjectStore('images',{keyPath:'id'});
 };
-dbReq.onsuccess=e=>db=e.target.result;
+dbReq.onsuccess=e=>{
+  db=e.target.result;
+  dbReady=true;
+};
 
 /* ===== logic ===== */
 const monthPicker=document.getElementById('monthPicker');
 const deptInput=document.getElementById('deptInput');
 const tbody=document.getElementById('tbody');
+const addBtn=document.getElementById('addBtn');
 
-monthPicker.onchange=loadMonth;
-deptInput.oninput=saveMonth;
-
-function addRow(d={},forceCheck=true){
-  if(forceCheck && !monthPicker.value){
-    showPopup({
-      title:'กรุณาเลือกเดือน',
-      msg:'ต้องเลือกเดือนก่อนเพิ่มรายการ'
-    });
+addBtn.onclick=()=>{
+  if(!monthPicker.value){
+    showPopup({title:'กรุณาเลือกเดือน',msg:'ต้องเลือกเดือนก่อนเพิ่มรายการ'});
     return;
   }
+  addRow();
+};
 
+function addRow(d={}){
   const rowId=d.id||crypto.randomUUID();
   const m=document.createElement('tr');
   m.dataset.id=rowId;
@@ -208,16 +216,9 @@ function bindRow(m,s){
   const box=m.querySelector('.img-box');
   const input=box.querySelector('input');
 
-  const tx=db.transaction('images','readonly');
-  tx.objectStore('images').get(rowId).onsuccess=e=>{
-    if(e.target.result){
-      box.innerHTML=`<img src="${e.target.result.data}"><input type="file" hidden>`;
-      bindRow(m,s);
-    }
-  };
-
   box.onclick=()=>input.click();
   input.onchange=()=>{
+    if(!dbReady) return;
     const f=input.files[0];
     if(!f) return;
     const r=new FileReader();
@@ -231,6 +232,17 @@ function bindRow(m,s){
     r.readAsDataURL(f);
   };
 
+  if(dbReady){
+    db.transaction('images','readonly')
+      .objectStore('images')
+      .get(rowId).onsuccess=e=>{
+        if(e.target.result){
+          box.innerHTML=`<img src="${e.target.result.data}"><input type="file" hidden>`;
+          bindRow(m,s);
+        }
+      };
+  }
+
   m.querySelector('.btn-del').onclick=()=>{
     showPopup({
       title:'ยืนยันการลบ',
@@ -238,8 +250,7 @@ function bindRow(m,s){
       actions:[
         {label:'ยกเลิก'},
         {label:'ลบ',type:'danger',onClick:()=>{
-          m.nextSibling.remove();
-          m.remove();
+          m.nextSibling.remove(); m.remove();
           renumber(); calcAll(); saveMonth();
         }}
       ]
@@ -247,11 +258,7 @@ function bindRow(m,s){
   };
 }
 
-function renumber(){
-  let i=1;
-  tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++);
-}
-
+function renumber(){let i=1;tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++)}
 function calcAll(){
   let g=0;
   tbody.querySelectorAll('.buy').forEach(b=>{
@@ -288,14 +295,13 @@ function saveMonth(){
 function loadMonth(){
   tbody.innerHTML='';
   const r=localStorage.getItem('PO_'+monthPicker.value);
-  if(!r){
-    addRow({},false);
-    return;
-  }
+  if(!r) return;
   const d=JSON.parse(r);
   deptInput.value=d.dept||'';
-  d.rows.forEach(row=>addRow(row,false));
+  d.rows.forEach(addRow);
 }
+
+monthPicker.onchange=loadMonth;
 
 function exportData(){
   const data=localStorage.getItem('PO_'+monthPicker.value);
@@ -309,7 +315,6 @@ function exportData(){
   a.download='PO_'+monthPicker.value+'.json';
   a.click();
 }
-
 function importData(){
   document.getElementById('importFile').click();
 }
@@ -324,9 +329,6 @@ document.getElementById('importFile').onchange=e=>{
   };
   r.readAsText(f);
 };
-
-/* แถวเริ่มต้น (ไม่บังคับเลือกเดือน) */
-addRow({},false);
 </script>
 </body>
 </html>
