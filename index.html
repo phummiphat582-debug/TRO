@@ -184,7 +184,8 @@ async function loadMonth(){
   const tx=db.transaction('months','readonly');
   const req=tx.objectStore('months').get(monthInput.value);
   req.onsuccess=()=>{
-    if(!req.result){addRow();return;}
+    if(!req.result){// init
+openDB().then(()=>addRow());return;}
     deptInput.value=req.result.dept||'';
     req.result.rows.forEach(addRow);
   };
