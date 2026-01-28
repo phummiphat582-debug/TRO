@@ -32,7 +32,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .sub-row td{background:#f9fafb}
 .sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
-/* popup */
+/* popup animation */
 .popup-backdrop{
   position:fixed;inset:0;
   background:rgba(0,0,0,.45);
@@ -105,7 +105,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 </div>
 
 <script>
-/* popup */
+/* ===== popup ===== */
 function showPopup({title,msg,actions=[]}){
   popupTitle.innerText=title;
   popupMsg.innerText=msg||'';
@@ -125,7 +125,7 @@ function closePopup(){
   setTimeout(()=>popup.style.display='none',200);
 }
 
-/* PWA install */
+/* ===== PWA install ===== */
 let deferredPrompt;
 const installBtn=document.getElementById('installBtn');
 window.addEventListener('beforeinstallprompt',e=>{
@@ -143,7 +143,7 @@ if('serviceWorker'in navigator){
   navigator.serviceWorker.register('/TRO/sw.js');
 }
 
-/* IndexedDB for images */
+/* ===== IndexedDB (images) ===== */
 let db;
 const dbReq=indexedDB.open('PO_IMAGES',1);
 dbReq.onupgradeneeded=e=>{
@@ -152,7 +152,7 @@ dbReq.onupgradeneeded=e=>{
 };
 dbReq.onsuccess=e=>db=e.target.result;
 
-/* logic */
+/* ===== logic ===== */
 const monthPicker=document.getElementById('monthPicker');
 const deptInput=document.getElementById('deptInput');
 const tbody=document.getElementById('tbody');
@@ -160,9 +160,12 @@ const tbody=document.getElementById('tbody');
 monthPicker.onchange=loadMonth;
 deptInput.oninput=saveMonth;
 
-function addRow(d={}){
-  if(!monthPicker.value){
-    showPopup({title:'กรุณาเลือกเดือน',msg:'ต้องเลือกเดือนก่อนเพิ่มรายการ'});
+function addRow(d={},forceCheck=true){
+  if(forceCheck && !monthPicker.value){
+    showPopup({
+      title:'กรุณาเลือกเดือน',
+      msg:'ต้องเลือกเดือนก่อนเพิ่มรายการ'
+    });
     return;
   }
 
@@ -219,7 +222,9 @@ function bindRow(m,s){
     if(!f) return;
     const r=new FileReader();
     r.onload=()=>{
-      db.transaction('images','readwrite').objectStore('images').put({id:rowId,data:r.result});
+      db.transaction('images','readwrite')
+        .objectStore('images')
+        .put({id:rowId,data:r.result});
       box.innerHTML=`<img src="${r.result}"><input type="file" hidden>`;
       bindRow(m,s);
     };
@@ -233,7 +238,8 @@ function bindRow(m,s){
       actions:[
         {label:'ยกเลิก'},
         {label:'ลบ',type:'danger',onClick:()=>{
-          m.nextSibling.remove(); m.remove();
+          m.nextSibling.remove();
+          m.remove();
           renumber(); calcAll(); saveMonth();
         }}
       ]
@@ -241,7 +247,11 @@ function bindRow(m,s){
   };
 }
 
-function renumber(){let i=1;tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++)}
+function renumber(){
+  let i=1;
+  tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++);
+}
+
 function calcAll(){
   let g=0;
   tbody.querySelectorAll('.buy').forEach(b=>{
@@ -255,7 +265,8 @@ function calcAll(){
 
 function saveMonth(){
   if(!monthPicker.value) return;
-  const rows=[]; const trs=[...tbody.children];
+  const rows=[];
+  const trs=[...tbody.children];
   for(let i=0;i<trs.length;i+=2){
     const m=trs[i], s=trs[i+1];
     rows.push({
@@ -277,15 +288,21 @@ function saveMonth(){
 function loadMonth(){
   tbody.innerHTML='';
   const r=localStorage.getItem('PO_'+monthPicker.value);
-  if(!r){addRow();return;}
+  if(!r){
+    addRow({},false);
+    return;
+  }
   const d=JSON.parse(r);
   deptInput.value=d.dept||'';
-  d.rows.forEach(addRow);
+  d.rows.forEach(row=>addRow(row,false));
 }
 
 function exportData(){
   const data=localStorage.getItem('PO_'+monthPicker.value);
-  if(!data) return showPopup({title:'ไม่มีข้อมูล',msg:'ยังไม่มีข้อมูลให้เซฟ'});
+  if(!data){
+    showPopup({title:'ไม่มีข้อมูล',msg:'ยังไม่มีข้อมูลให้เซฟ'});
+    return;
+  }
   const blob=new Blob([data],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -308,7 +325,8 @@ document.getElementById('importFile').onchange=e=>{
   r.readAsText(f);
 };
 
-addRow();
+/* แถวเริ่มต้น (ไม่บังคับเลือกเดือน) */
+addRow({},false);
 </script>
 </body>
 </html>
