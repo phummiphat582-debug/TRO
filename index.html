@@ -68,7 +68,6 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn add" onclick="addRow()">+ เพิ่มรายการ</button>
       <button class="btn add" onclick="for(let i=0;i<10;i++)addRow()">+ เพิ่ม 10 รายการ</button>
-      <button class="btn add" onclick="openCopyModal()">📋 คัดลอกจากเดือนก่อน</button>
     </div>
   </div>
 
@@ -83,33 +82,20 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
   </div>
 </div>
 
-<!-- modals -->
-<div class="modal" id="deleteModal">
-  <div class="modal-box">
-    <h3>ยืนยันการลบ</h3>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeDelete()">ยกเลิก</button>
-      <button class="btn danger" onclick="confirmDelete()">ลบ</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal" id="copyModal">
-  <div class="modal-box">
-    <h3>คัดลอกจากเดือนก่อน</h3>
-    <input type="month" id="copyFrom" style="margin-top:12px">
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeCopy()">ยกเลิก</button>
-      <button class="btn add" onclick="confirmCopy()">คัดลอก</button>
-    </div>
-  </div>
-</div>
-
 <script>
+/* ===== IndexedDB สำหรับรูป ===== */
+let db;
+const dbReq = indexedDB.open('PO_IMAGES',1);
+dbReq.onupgradeneeded = e=>{
+  db = e.target.result;
+  db.createObjectStore('images',{keyPath:'id'});
+};
+dbReq.onsuccess = e=>db=e.target.result;
+
+/* ===== logic หลัก ===== */
 const monthPicker=document.getElementById('monthPicker');
 const deptInput=document.getElementById('deptInput');
 const tbody=document.getElementById('tbody');
-let deleteTarget=null;
 
 monthPicker.onchange=loadMonth;
 deptInput.oninput=saveMonth;
@@ -120,12 +106,21 @@ function addRow(d={}){
     return;
   }
 
+  const rowId = d.id || crypto.randomUUID();
+
   const m=document.createElement('tr');
+  m.dataset.id=rowId;
   const s=document.createElement('tr'); s.className='sub-row';
+
   m.innerHTML=`
     <td class="no"></td>
     <td><textarea>${d.desc||''}</textarea></td>
-    <td><div class="img-box"><span class="img-hint">แนบรูป</span><input type="file" hidden></div></td>
+    <td>
+      <div class="img-box">
+        <span class="img-hint">แนบรูป</span>
+        <input type="file" hidden>
+      </div>
+    </td>
     <td><input value="${d.unit||''}"></td>
     <td><input type="number" value="${d.stock||''}"></td>
     <td><input type="text" value="${d.remain||''}"></td>
@@ -133,25 +128,66 @@ function addRow(d={}){
     <td><input type="number" class="price" value="${d.price||0}"></td>
     <td class="sum">0.00</td>
     <td><input value="${d.vendor||''}"></td>
-    <td><button class="btn-del" onclick="askDelete(this)">🗑</button></td>`;
-  s.innerHTML=`<td colspan="11"><div class="sub-grid">
-    <div><label>จุดประสงค์</label><textarea>${d.purpose||''}</textarea></div>
-    <div><label>สถานที่ใช้งาน</label><textarea>${d.location||''}</textarea></div>
-  </div></td>`;
+    <td><button class="btn-del" onclick="this.closest('tr').nextSibling.remove();this.closest('tr').remove();renumber();calcAll();saveMonth()">🗑</button></td>
+  `;
+
+  s.innerHTML=`
+    <td colspan="11">
+      <div class="sub-grid">
+        <div><label>จุดประสงค์</label><textarea>${d.purpose||''}</textarea></div>
+        <div><label>สถานที่ใช้งาน</label><textarea>${d.location||''}</textarea></div>
+      </div>
+    </td>`;
+
   tbody.append(m,s);
-  bindRow(m,s); renumber(); calcAll(); saveMonth();
+  bindRow(m,s);
+  renumber(); calcAll(); saveMonth();
 }
 
 function bindRow(m,s){
   [...m.querySelectorAll('input,textarea'),...s.querySelectorAll('textarea')]
     .forEach(e=>e.oninput=()=>{calcAll();saveMonth();});
+
+  const rowId=m.dataset.id;
+  const box=m.querySelector('.img-box');
+  const fileInput=box.querySelector('input');
+
+  // โหลดรูปจาก IndexedDB
+  const tx=db.transaction('images','readonly');
+  const store=tx.objectStore('images');
+  const req=store.get(rowId);
+  req.onsuccess=()=>{
+    if(req.result){
+      box.innerHTML=`<img src="${req.result.data}"><input type="file" hidden>`;
+      bindRow(m,s);
+    }
+  };
+
+  box.onclick=()=>fileInput.click();
+  fileInput.onchange=()=>{
+    const file=fileInput.files[0];
+    if(!file) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      const tx=db.transaction('images','readwrite');
+      tx.objectStore('images').put({id:rowId,data:r.result});
+      box.innerHTML=`<img src="${r.result}"><input type="file" hidden>`;
+      bindRow(m,s);
+    };
+    r.readAsDataURL(file);
+  };
 }
 
-function askDelete(b){deleteTarget=b.closest('tr');deleteModal.style.display='flex'}
-function closeDelete(){deleteModal.style.display='none'}
-function confirmDelete(){const s=deleteTarget.nextSibling;deleteTarget.remove();s.remove();closeDelete();renumber();calcAll();saveMonth()}
-
-function calcAll(){let g=0;tbody.querySelectorAll('.buy').forEach(b=>{const tr=b.closest('tr');const s=(b.value*tr.querySelector('.price').value||0).toFixed(2);tr.querySelector('.sum').innerText=s;g+=+s});grand.innerText=g.toFixed(2)}
+function calcAll(){
+  let g=0;
+  tbody.querySelectorAll('.buy').forEach(b=>{
+    const tr=b.closest('tr');
+    const s=(b.value*tr.querySelector('.price').value||0).toFixed(2);
+    tr.querySelector('.sum').innerText=s;
+    g+=+s;
+  });
+  grand.innerText=g.toFixed(2);
+}
 function renumber(){let i=1;tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++)}
 
 function saveMonth(){
@@ -160,6 +196,7 @@ function saveMonth(){
   for(let i=0;i<trs.length;i+=2){
     const m=trs[i], s=trs[i+1];
     rows.push({
+      id:m.dataset.id,
       desc:m.children[1].querySelector('textarea').value,
       unit:m.children[3].querySelector('input').value,
       stock:m.children[4].querySelector('input').value,
@@ -183,20 +220,6 @@ function loadMonth(){
   d.rows.forEach(addRow);
 }
 
-function openCopyModal(){
-  const d=new Date(monthPicker.value+'-01');
-  d.setMonth(d.getMonth()-1);
-  copyFrom.value=d.toISOString().slice(0,7);
-  copyModal.style.display='flex';
-}
-function closeCopy(){copyModal.style.display='none'}
-function confirmCopy(){
-  const r=localStorage.getItem('PO_'+copyFrom.value);
-  if(!r) return alert('ไม่พบข้อมูล');
-  localStorage.setItem('PO_'+monthPicker.value,r);
-  closeCopy(); loadMonth();
-}
-
 function exportData(){
   const data=localStorage.getItem('PO_'+monthPicker.value);
   if(!data) return alert('ไม่มีข้อมูล');
@@ -206,7 +229,6 @@ function exportData(){
   a.download='PO_'+monthPicker.value+'.json';
   a.click();
 }
-
 function importData(){
   document.getElementById('importFile').click();
 }
