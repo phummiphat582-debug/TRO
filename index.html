@@ -212,6 +212,37 @@ function bindRow(m,s){
   [...m.querySelectorAll('input,textarea'),...s.querySelectorAll('textarea')]
     .forEach(e=>e.oninput=()=>{calcAll();saveMonth();});
 
+  const rowId=m.dataset.id;
+  const box=m.querySelector('.img-box');
+  const input=box.querySelector('input');
+
+  box.onclick=()=>input.click();
+  input.onchange=()=>{
+    if(!dbReady) return;
+    const f=input.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      db.transaction('images','readwrite')
+        .objectStore('images')
+        .put({id:rowId,data:r.result});
+      box.innerHTML=`<img src="${r.result}"><input type="file" hidden>`;
+      bindRow(m,s);
+    };
+    r.readAsDataURL(f);
+  };
+
+  if(dbReady){
+    db.transaction('images','readonly')
+      .objectStore('images')
+      .get(rowId).onsuccess=e=>{
+        if(e.target.result){
+          box.innerHTML=`<img src="${e.target.result.data}"><input type="file" hidden>`;
+          bindRow(m,s);
+        }
+      };
+  }
+
   m.querySelector('.btn-del').onclick=()=>{
     showPopup({
       title:'ยืนยันการลบ',
@@ -227,28 +258,16 @@ function bindRow(m,s){
   };
 }
 
-function renumber(){
-  let i=1;
-  tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++);
-}
-
-/* ===== FIXED CALC (เหมือนเดิมทุกอย่าง แก้แค่ตรรกะ) ===== */
+function renumber(){let i=1;tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++)}
 function calcAll(){
-  let g = 0;
-
-  tbody.querySelectorAll('tr').forEach(tr=>{
-    const buy = tr.querySelector('.buy');
-    const price = tr.querySelector('.price');
-    const sum = tr.querySelector('.sum');
-
-    if(buy && price && sum){
-      const s = (Number(buy.value) * Number(price.value) || 0).toFixed(2);
-      sum.innerText = s;
-      g += Number(s);
-    }
+  let g=0;
+  tbody.querySelectorAll('.buy').forEach(b=>{
+    const tr=b.closest('tr');
+    const s=(b.value*tr.querySelector('.price').value||0).toFixed(2);
+    tr.querySelector('.sum').innerText=s;
+    g+=+s;
   });
-
-  grand.innerText = g.toFixed(2);
+  grand.innerText=g.toFixed(2);
 }
 
 function saveMonth(){
