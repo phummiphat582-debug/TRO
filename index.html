@@ -11,13 +11,23 @@
 *{box-sizing:border-box}
 body{margin:0;background:#f0f1f3;font-family:Segoe UI,Tahoma,sans-serif;color:#222}
 .page{max-width:1800px;margin:32px auto;background:#fff;padding:32px 36px;border-radius:16px}
-.header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #d6d9de;padding-bottom:16px}
+.header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #d6d9de;padding-bottom:16px;flex-wrap:wrap;gap:16px}
 .header-left h1{margin:0;font-size:28px}
 .header-left h2{margin:4px 0 0;font-size:16px;color:#666}
-.header-right{display:flex;gap:20px}
+.header-right{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end}
 label{font-size:12px;font-weight:600;color:#555}
-input,textarea{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px}
+input,textarea,select{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit}
 textarea{resize:vertical}
+
+/* order bar */
+.order-bar{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;background:#f5f6f8;border-radius:14px;padding:14px 18px;margin-top:20px}
+.order-bar .field{min-width:220px}
+.order-bar .btnrow{display:flex;gap:8px}
+.btn-sm{padding:8px 14px;border-radius:10px;font-weight:600;border:none;cursor:pointer;font-size:12px;white-space:nowrap}
+.btn-new{background:#2563eb;color:#fff}
+.btn-del-order{background:#fee2e2;color:#b91c1c}
+.badge-count{font-size:11px;color:#64748b;margin-left:4px}
+
 .card{margin-top:24px;background:#fafafa;padding:20px;border-radius:16px}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{background:#2f2f2f;color:#fff;padding:8px}
@@ -25,12 +35,13 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .btn{padding:8px 18px;border-radius:12px;font-weight:600;border:none;cursor:pointer}
 .btn.add{background:#e6e8ec}
 .btn-del{background:#fee2e2;border:none;border-radius:8px;padding:4px 8px;cursor:pointer}
-.actions{margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.actions{margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .img-box{width:130px;height:130px;border:2px dashed #94a3b8;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:#fff}
 .img-box img{width:100%;height:100%;object-fit:cover}
 .img-hint{font-size:11px;color:#64748b;text-align:center}
 .sub-row td{background:#f9fafb}
 .sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.empty-state{padding:40px;text-align:center;color:#64748b;font-size:14px}
 
 /* popup */
 .popup-backdrop{
@@ -52,7 +63,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .popup .primary{background:#2563eb;color:#fff}
 .popup .ghost{background:#e5e7eb}
 
-@media print{button,.btn-del,#installBtn{display:none!important}}
+@media print{button,.btn-del,.order-bar .btnrow,#installBtn{display:none!important}}
 </style>
 </head>
 <body>
@@ -65,11 +76,26 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
     </div>
     <div class="header-right">
       <div><label>เดือน</label><input type="month" id="monthPicker"></div>
-      <div><label>แผนก</label><input type="text" id="deptInput"></div>
     </div>
   </div>
 
-  <div class="card">
+  <!-- order bar: pick / create / delete a department's order within the selected month -->
+  <div class="order-bar" id="orderBar" style="display:none">
+    <div class="field">
+      <label>ใบสั่งซื้อ (แผนก) ในเดือนนี้ <span class="badge-count" id="orderCount"></span></label>
+      <select id="orderSelect"></select>
+    </div>
+    <div class="field">
+      <label>แผนก</label>
+      <input type="text" id="deptInput" placeholder="ชื่อแผนก">
+    </div>
+    <div class="btnrow">
+      <button class="btn-sm btn-new" id="newOrderBtn">+ ใบสั่งซื้อแผนกใหม่</button>
+      <button class="btn-sm btn-del-order" id="delOrderBtn">🗑 ลบใบสั่งซื้อนี้</button>
+    </div>
+  </div>
+
+  <div class="card" id="cardArea" style="display:none">
     <table>
       <thead>
         <tr>
@@ -83,7 +109,9 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
     <button class="btn add" id="addBtn">+ เพิ่มรายการ</button>
   </div>
 
-  <div class="actions">
+  <div id="emptyMonthState" class="empty-state">กรุณาเลือกเดือนเพื่อเริ่มสร้างใบสั่งซื้อ</div>
+
+  <div class="actions" id="actionsArea" style="display:none">
     <strong>รวม <span id="grand">0.00</span> บาท</strong>
     <div>
       <button class="btn add" onclick="exportData()">💾 เซฟข้อมูล</button>
@@ -134,7 +162,7 @@ function closePopup(){
   setTimeout(()=>popup.style.display='none',200);
 }
 
-/* IndexedDB */
+/* IndexedDB (for row images) */
 let dbReady=false, db;
 const dbReq=indexedDB.open('PO_IMAGES',1);
 dbReq.onupgradeneeded=e=>{
@@ -146,22 +174,189 @@ dbReq.onsuccess=e=>{
   dbReady=true;
 };
 
-/* logic */
+/* ---------------- multi-department order management ---------------- */
+/*
+  Index shape (localStorage 'PO_INDEX'):
+  { "2025-07": [ {id:"uuid", dept:"ครัว"}, {id:"uuid2", dept:"สวน"} ], ... }
+
+  Each order's data (localStorage 'PO_ORDER_<id>'):
+  { dept, month, rows:[...] }
+*/
 const monthPicker=document.getElementById('monthPicker');
 const deptInput=document.getElementById('deptInput');
 const tbody=document.getElementById('tbody');
 const addBtn=document.getElementById('addBtn');
+const orderBar=document.getElementById('orderBar');
+const orderSelect=document.getElementById('orderSelect');
+const orderCount=document.getElementById('orderCount');
+const newOrderBtn=document.getElementById('newOrderBtn');
+const delOrderBtn=document.getElementById('delOrderBtn');
+const cardArea=document.getElementById('cardArea');
+const actionsArea=document.getElementById('actionsArea');
+const emptyMonthState=document.getElementById('emptyMonthState');
+
+let currentOrderId=null;
+
+function getIndex(){
+  try{ return JSON.parse(localStorage.getItem('PO_INDEX')||'{}'); }
+  catch{ return {}; }
+}
+function setIndex(idx){
+  localStorage.setItem('PO_INDEX',JSON.stringify(idx));
+}
+
+function ordersForMonth(month){
+  const idx=getIndex();
+  return idx[month]||[];
+}
+
+function uuid(){
+  return (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(16).slice(2));
+}
+
+function refreshOrderSelect(selectId){
+  const month=monthPicker.value;
+  const list=ordersForMonth(month);
+  orderSelect.innerHTML='';
+  list.forEach(o=>{
+    const opt=document.createElement('option');
+    opt.value=o.id;
+    opt.innerText=o.dept && o.dept.trim() ? o.dept : '(ยังไม่ตั้งชื่อแผนก)';
+    orderSelect.appendChild(opt);
+  });
+  orderCount.innerText = list.length ? `(${list.length} แผนก)` : '';
+  if(selectId && list.some(o=>o.id===selectId)){
+    orderSelect.value=selectId;
+  }
+}
+
+function setUiForHasMonth(hasOrders){
+  orderBar.style.display = monthPicker.value ? 'flex' : 'none';
+  cardArea.style.display = hasOrders ? 'block' : 'none';
+  actionsArea.style.display = hasOrders ? 'flex' : 'none';
+  emptyMonthState.style.display = hasOrders ? 'none' : 'block';
+  if(!monthPicker.value){
+    emptyMonthState.innerText='กรุณาเลือกเดือนเพื่อเริ่มสร้างใบสั่งซื้อ';
+  } else if(!hasOrders){
+    emptyMonthState.innerText='ยังไม่มีใบสั่งซื้อในเดือนนี้ กด "+ ใบสั่งซื้อแผนกใหม่" เพื่อเริ่มต้น';
+  }
+}
+
+monthPicker.onchange=()=>{
+  const month=monthPicker.value;
+  if(!month){
+    currentOrderId=null;
+    setUiForHasMonth(false);
+    return;
+  }
+  const list=ordersForMonth(month);
+  if(list.length===0){
+    setUiForHasMonth(false);
+    refreshOrderSelect();
+  } else {
+    refreshOrderSelect(list[0].id);
+    loadOrder(list[0].id);
+  }
+};
+
+orderSelect.onchange=()=>{
+  loadOrder(orderSelect.value);
+};
+
+newOrderBtn.onclick=()=>{
+  if(!monthPicker.value){
+    showPopup({title:'กรุณาเลือกเดือนก่อน'});
+    return;
+  }
+  createNewOrder();
+};
+
+delOrderBtn.onclick=()=>{
+  if(!currentOrderId) return;
+  showPopup({
+    title:'ยืนยันการลบใบสั่งซื้อนี้',
+    msg:'รายการสินค้าทั้งหมดในใบสั่งซื้อนี้จะถูกลบ',
+    actions:[
+      {label:'ยกเลิก'},
+      {label:'ลบ',type:'danger',onClick:deleteCurrentOrder}
+    ]
+  });
+};
+
+function createNewOrder(){
+  const month=monthPicker.value;
+  const id=uuid();
+  const idx=getIndex();
+  idx[month]=idx[month]||[];
+  idx[month].push({id,dept:''});
+  setIndex(idx);
+
+  localStorage.setItem('PO_ORDER_'+id,JSON.stringify({dept:'',month,rows:[]}));
+
+  refreshOrderSelect(id);
+  loadOrder(id);
+}
+
+function loadOrder(id){
+  currentOrderId=id;
+  const raw=localStorage.getItem('PO_ORDER_'+id);
+  const data=raw?JSON.parse(raw):{dept:'',rows:[]};
+  deptInput.value=data.dept||'';
+  tbody.innerHTML='';
+  (data.rows||[]).forEach(addRow);
+  renumber(); calcAll();
+  refreshOrderSelect(id);
+  setUiForHasMonth(true);
+}
+
+function deleteCurrentOrder(){
+  const month=monthPicker.value;
+  const id=currentOrderId;
+  if(!id) return;
+
+  localStorage.removeItem('PO_ORDER_'+id);
+  const idx=getIndex();
+  idx[month]=(idx[month]||[]).filter(o=>o.id!==id);
+  if(idx[month].length===0) delete idx[month];
+  setIndex(idx);
+
+  const remaining=ordersForMonth(month);
+  if(remaining.length>0){
+    refreshOrderSelect(remaining[0].id);
+    loadOrder(remaining[0].id);
+  } else {
+    currentOrderId=null;
+    tbody.innerHTML='';
+    deptInput.value='';
+    setUiForHasMonth(false);
+  }
+}
+
+deptInput.oninput=()=>{
+  saveCurrentOrder();
+  // keep dept name in sync inside the index & the dropdown label
+  const month=monthPicker.value;
+  const idx=getIndex();
+  const entry=(idx[month]||[]).find(o=>o.id===currentOrderId);
+  if(entry){
+    entry.dept=deptInput.value;
+    setIndex(idx);
+    refreshOrderSelect(currentOrderId);
+  }
+};
+
+/* ---------------- row / table logic (per current order) ---------------- */
 
 addBtn.onclick=()=>{
-  if(!monthPicker.value){
-    showPopup({title:'กรุณาเลือกเดือน'});
+  if(!currentOrderId){
+    showPopup({title:'กรุณาเลือกหรือสร้างใบสั่งซื้อก่อน'});
     return;
   }
   addRow();
 };
 
 function addRow(d={}){
-  const rowId=d.id||crypto.randomUUID();
+  const rowId=d.id||uuid();
   const m=document.createElement('tr');
   const s=document.createElement('tr'); s.className='sub-row';
   m.dataset.id=rowId;
@@ -186,12 +381,12 @@ function addRow(d={}){
 
   tbody.append(m,s);
   bindRow(m,s);
-  renumber(); calcAll(); saveMonth();
+  renumber(); calcAll(); saveCurrentOrder();
 }
 
 function bindRow(m,s){
   [...m.querySelectorAll('input,textarea'),...s.querySelectorAll('textarea')]
-    .forEach(e=>e.oninput=()=>{calcAll();saveMonth();});
+    .forEach(e=>e.oninput=()=>{calcAll();saveCurrentOrder();});
 
   const rowId=m.dataset.id;
   const box=m.querySelector('.img-box');
@@ -245,7 +440,7 @@ function bindRow(m,s){
         {label:'ยกเลิก'},
         {label:'ลบ',type:'danger',onClick:()=>{
           m.nextSibling.remove(); m.remove();
-          renumber(); calcAll(); saveMonth();
+          renumber(); calcAll(); saveCurrentOrder();
         }}
       ]
     });
@@ -264,8 +459,8 @@ function calcAll(){
   grand.innerText=g.toFixed(2);
 }
 
-function saveMonth(){
-  if(!monthPicker.value) return;
+function saveCurrentOrder(){
+  if(!currentOrderId || !monthPicker.value) return;
   const rows=[];
   const trs=[...tbody.children];
   for(let i=0;i<trs.length;i+=2){
@@ -283,34 +478,38 @@ function saveMonth(){
       location:s.querySelectorAll('textarea')[1].value
     });
   }
-  localStorage.setItem('PO_'+monthPicker.value,JSON.stringify({dept:deptInput.value,rows}));
+  localStorage.setItem('PO_ORDER_'+currentOrderId,JSON.stringify({
+    dept:deptInput.value,
+    month:monthPicker.value,
+    rows
+  }));
 }
 
-function loadMonth(){
-  tbody.innerHTML='';
-  const r=localStorage.getItem('PO_'+monthPicker.value);
-  if(!r) return;
-  const d=JSON.parse(r);
-  deptInput.value=d.dept||'';
-  d.rows.forEach(addRow);
-}
-
-monthPicker.onchange=loadMonth;
+/* ---------------- export / import (per current order) ---------------- */
 
 function exportData(){
-  const data=localStorage.getItem('PO_'+monthPicker.value);
+  if(!currentOrderId){
+    showPopup({title:'ไม่มีข้อมูล'});
+    return;
+  }
+  const data=localStorage.getItem('PO_ORDER_'+currentOrderId);
   if(!data){
     showPopup({title:'ไม่มีข้อมูล'});
     return;
   }
+  const deptSlug=(deptInput.value||'order').replace(/[^\wก-๙]+/g,'_');
   const blob=new Blob([data],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='PO_'+monthPicker.value+'.json';
+  a.download='PO_'+monthPicker.value+'_'+deptSlug+'.json';
   a.click();
 }
 
 function importData(){
+  if(!currentOrderId){
+    showPopup({title:'กรุณาเลือกหรือสร้างใบสั่งซื้อก่อน'});
+    return;
+  }
   document.getElementById('importFile').click();
 }
 document.getElementById('importFile').onchange=e=>{
@@ -318,12 +517,27 @@ document.getElementById('importFile').onchange=e=>{
   if(!f) return;
   const r=new FileReader();
   r.onload=()=>{
-    localStorage.setItem('PO_'+monthPicker.value,r.result);
-    loadMonth();
-    showPopup({title:'กู้ข้อมูลสำเร็จ'});
+    try{
+      const parsed=JSON.parse(r.result);
+      // keep the imported data under the CURRENT order id / month so the index stays consistent
+      parsed.month=monthPicker.value;
+      localStorage.setItem('PO_ORDER_'+currentOrderId,JSON.stringify(parsed));
+
+      const idx=getIndex();
+      const entry=(idx[monthPicker.value]||[]).find(o=>o.id===currentOrderId);
+      if(entry){ entry.dept=parsed.dept||entry.dept; setIndex(idx); }
+
+      loadOrder(currentOrderId);
+      showPopup({title:'กู้ข้อมูลสำเร็จ'});
+    }catch(err){
+      showPopup({title:'ไฟล์ไม่ถูกต้อง'});
+    }
   };
   r.readAsText(f);
 };
+
+/* initial state */
+setUiForHasMonth(false);
 </script>
 </body>
 </html>
